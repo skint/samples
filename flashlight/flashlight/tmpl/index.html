@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebSockets Client</title>
+  <script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+<script>
+
+$(document).ready(function(){
+    $("#flashlight").css("width", 100);
+    $("#flashlight").css("height", 100);
+    $("#flashlight").css("background-color", "#e8e8e8");
+
+    function setStatus(state){
+        $("#status").append("<p>"+state+"</p>");
+    }
+
+  if (!("WebSocket" in window)) {
+    alert("Your browser does not support web sockets");
+  }else{
+    setup();
+  }
+
+
+  function setup(){
+
+    var host = "ws://{{ srvhost }}/ws";
+    var socket = new WebSocket(host);
+    //console.log("socket status: " + socket.readyState);
+
+
+    // event handlers for websocket
+    if(socket){
+
+      socket.onopen = function(){
+        setStatus("Client connected.");
+        //alert("connection opened....");
+      }
+
+      socket.onmessage = function(msg){
+          if(msg.data == "on"){
+            powerON();
+          } else if (msg.data == "off"){
+            powerOFF();
+          } else { setColor(msg.data) }
+      }
+
+      socket.onclose = function(){
+        //alert("connection closed....");
+        setState("The connection has been closed.");
+      }
+
+    }else{
+      console.log("invalid socket");
+    }
+
+    function powerON(){
+        $("#flashlight").css("background-color", "#ffff99");
+        setStatus("Flashlight powered ON");
+    }
+
+    function powerOFF(){
+        $("#flashlight").css("background-color", "#e8e8e8");
+        setStatus("Flashlight powered OFF");
+    }
+
+    function setColor(data){
+        color = "#"+data
+        $("#flashlight").css("background-color", color);
+        setStatus("Flashlight color set to " + color);
+    }
+
+
+  }
+});
+
+</script>
+</head>
+<body>
+The Flashlight:
+<div id="flashlight">
+</div>
+<div id="status"></div>
+</body>
+</html>

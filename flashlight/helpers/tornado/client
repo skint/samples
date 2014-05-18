@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+# coding: utf8
+# vim: ft=python
+
+__author__ = 'breaker <breaker@broken.su>'
+
+import tornado.ioloop
+import tornado.iostream
+import functools
+import socket
+from binascii import hexlify
+
+
+class FlashlightFactory(object):
+    def __init__(self, stream=None):
+        self.actions = {
+            '\x12' : self.powerOn,
+            '\x13' : self.powerOff,
+            '\x20' : self.setColor,
+        }
+        self.stream = stream
+        self._read_head()
+
+    def _read_head(self):
+        self.stream.read_bytes(3, self._parse_cmd)
+        # self.stream.read_until_close(self._end, self._process)
+
+    def _parse_cmd(self, data):
+        cmd = data[0]
+        size = sum(map(ord, list(data[1:])))
+        try:
+            self.actions[cmd](size)
+        except Exception, e:
+            print "Exc: %s:" % e
+            self._read_head()
+
+    def _process(self, data=None):
+        print "Data processed: %s" % "".join(hexlify(b) for b in list(data))
+
+    def _end(self, data=None):
+        print "Data ended: %s" % "".join(hexlify(b) for b in list(data))
+
+    def powerOn(self, size=None):
+        print "Powered ON"
+        self._read_head()
+
+    def powerOff(self, size=None):
+        print "Powered OFF"
+        self._read_head()
+
+    def setColor(self, size=None):
+        def realSet(color):
+            print "Set color to #%s" %  "".join(hexlify(b) for b in list(color))
+        self.stream.read_bytes(size, realSet)
+        self._read_head()
+
+
+if __name__ == "__main__":
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+    stream = tornado.iostream.IOStream(s)
+    factory = functools.partial(FlashlightFactory, stream)
+    stream.connect(("127.0.0.1", 9999), factory)
+    core = tornado.ioloop.IOLoop.instance()
+    try:
+        core.start()
+    except KeyboardInterrupt:
+        stream.close()
+        core.stop()
+        print "\nClear exit"

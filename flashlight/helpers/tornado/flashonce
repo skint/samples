@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+# coding: utf8
+# vim: ft=python
+import tornado.ioloop
+import tornado.iostream
+import socket
+from binascii import hexlify
+from time import sleep
+
+struct = {
+    '\x12' : "ON",
+    '\x13' : "OFF",
+    '\x20' : "COLOR"
+}
+
+def quit():
+    stream.close()
+    tornado.ioloop.IOLoop.instance().stop()
+
+def powerOn():
+    print "Powered ON"
+    quit()
+
+def powerOff():
+    print "Powered OFF"
+    quit()
+
+def setColor(color):
+    print "#%s" %  "".join(hexlify(b) for b in list(color))
+    quit()
+
+def read_data():
+    stream.read_bytes(3, on_cmd)
+    #stream.read_bytes(3, on_finish, streaming_callback=on_stream)
+
+def on_stream(data):
+    print "Streamed with: %s" % hexlify(data)
+
+def on_finish(data):
+    print "Finished"
+    quit()
+
+def on_cmd(data):
+    cmd = data[0]
+    size = sum(map(ord, list(data[1:])))
+    if cmd in struct.keys():
+        if struct[cmd] == "ON":
+            powerOn()
+        elif struct[cmd] == "OFF":
+            powerOFF()
+        elif struct[cmd] == "COLOR":
+            stream.read_bytes(size, setColor)
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+stream = tornado.iostream.IOStream(s)
+stream.connect(("127.0.0.1", 9999), read_data)
+tornado.ioloop.IOLoop.instance().start()

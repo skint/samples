@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+# coding: utf8
+
+# vim: ft=python
+
+__author__ = 'breaker <breaker@broken.su>'
+
+from twisted.internet.protocol import ServerFactory
+from twisted.internet.protocol import Protocol
+from twisted.internet import reactor
+import random
+from proto import packet, body
+
+colors_list = ["#000000", "#0000ff", "#00ff00", "#ff0000", "#00ffff", "#ff00ff", "#ffff00", "#ffffff"]
+
+
+class FlashilghtControlProtocol(Protocol):
+
+    def connectionMade(self):
+        self.factory.connections += 1
+        self.client = self.transport.getPeer()
+        self.factory.clients.append(self.client)
+        print "Flashlight #%i coming: %s:%i" % (self.factory.connections, self.client.host, self.client.port)
+        self.switchPower('on')
+        self.switchColor(colors_list)
+        self.sendTrash()
+
+    def connectionLost(self, reason):
+        print "Flashlight lost: %s:%i" % (self.client.host, self.client.port)
+        self.factory.clients.remove(self.client)
+        self.factory.connections -= 1
+
+    def dataReceived(self, data):
+        print data
+
+    def switchPower(self, state):
+        if self.client in self.factory.clients:
+            if state in [True, 'on', 1, 'yes']:
+                state = 'ON'
+                nextstate = 'off'
+                nexttime = 20
+            elif state in [False, 'off', 0, 'no']:
+                state = 'OFF'
+                nextstate = 'on'
+                nexttime = 5
+            else:
+                # raise Exception
+                pass
+            b = body(cmd=state, payload=body(length=0))
+            p = packet.build(b)
+            self.transport.write(p)
+            print "Flashlight %s:%i power turned %s" % (self.client.host, self.client.port, state.lower())
+            # switch every <nexttime> seconds
+            reactor.callLater(nexttime, self.switchPower, nextstate)
+        else:
+            print "Stop power switching"
+
+    def switchColor(self, colors):
+        if self.client in self.factory.clients:
+            color = random.choice(colors)
+            b = body(cmd="COLOR", payload=body(length=3, color=color))
+            p = packet.build(b)
+            self.transport.write(p)
+            print "Flashlight %s:%i color switched to %s" % (self.client.host, self.client.port, color)
+            # change every 2 seconds
+            reactor.callLater(2, self.switchColor, colors)
+        else:
+            print "Stop color switching"
+
+    def sendTrash(self):
+        if self.client in self.factory.clients:
+            import random
+            data = ''.join( [chr(random.randint(0,255)) for i in xrange(0,15)] )
+            self.transport.write(data)
+            print "Flashlight %s:%i sended trash" % (self.client.host, self.client.port)
+            # change every 2 seconds
+            reactor.callLater(5, self.sendTrash)
+        else:
+            print "Stop trash sending"
+
+    #def explode(self):
+        #pass
+
+    #def strob(self):
+        #pass
+
+    def rawDataReceived(self, data):
+        print "Data from %s:%i received: %s" % (self.client.host, self.client.host, data)
+
+class FlashlightAPI(ServerFactory):
+
+    protocol = FlashilghtControlProtocol
+
+    def __init__(self):
+        self.clients = []
+        self.connections = 0
+
+
+reactor.listenTCP(9999, FlashlightAPI())
+reactor.run()
