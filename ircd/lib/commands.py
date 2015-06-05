@@ -71,18 +71,53 @@ class commandMixin(object):
                         value = params[2]
                     elif params[1][0] == '-':
                         value = None
-                    setattr(channel, params[1][1], result)
+                    setattr(channel, params[1][1], value)
                     self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], ' '.join(params[2:])))
 
                 elif params[1][1] == 'b':
                     if params[1][0] == '+':
-                        channel.b.append(params[2])
+                        if len(params) < 3:
+                            print channel.b
+                            for ban in channel.b:
+                                self.sendMessage(rpl.RPL_BANLIST, "%s %s" % (who, ban))
+                            self.sendMessage(rpl.RPL_ENDOFBANLIST, "%s :End of channel ban list" % who)
+                            print "HERE"
+                        else:
+                            channel.b.append(params[2])
+                            self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
+                    elif params[1][0] == '-':
+                        try:
+                            channel.b.remove(params[2])
+                            self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
+                        except:
+                            pass
+
+                elif params[1][1] == 'o':
+                    if params[1][0] == '+':
+                        if len(params) < 3:
+                            self.sendMessage(err.ERR_NEEDMOREPARAMS, "MODE:Not enough parameters")
+                        else:
+                            channel.o.append(params[2])
                     elif params[1][0] == '-':
                         try:
                             channel.b.remove(params[2])
                         except:
                             pass
                     self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
+
+                elif params[1][1] == 'v':
+                    if params[1][0] == '+':
+                        if len(params) < 3:
+                            self.sendMessage(err.ERR_NEEDMOREPARAMS, "MODE :Not enough parameters")
+                        else:
+                            channel.v.append(params[2])
+                    elif params[1][0] == '-':
+                        try:
+                            channel.b.remove(params[2])
+                        except:
+                            pass
+                    self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
+
             except Exception, e:
                 print e
                 self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % who)
@@ -136,6 +171,7 @@ class commandMixin(object):
                 if chan not in self.server.channels.keys():
                     try:
                         c = Channel(chan, self)
+                        self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
                     except Exception, e:
                         self.sendMessage(err.ERR_NOSUCHCHANNEL, '%s :%s' % (params[0], e))
                 else:
@@ -143,6 +179,28 @@ class commandMixin(object):
                     if c.k == chans[chan]:
                         c.clients[self.nickname] = self
                         self.channels[chan] = c
+                        self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
                     else:
-                        self.sendMessage(err.ERR_BADCHANNELKEY, ":Cannot join channel (+k)")
-                self.sendMessage(rpl.RPL_TOPIC, "%s :%s" % (chan, c.topic))
+                        self.sendMessage(err.ERR_BADCHANNELKEY, ":%s" % chan)
+
+    def topic_cmd(self, params):
+        if len(params) < 1:
+            self.sendMessage(err.ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters")
+        else:
+            try:
+                chan = self.channels[params[0]]
+                if len(params) > 1:
+                    if self.nickname not in chan.clients.keys():
+                        self.sendMessage(err.ERR_NOTONCHANNEL, "%s :You're not on that channel" % params[0])
+                    elif chan.t is True and self.nickname not in chan.o:
+                        # self.sendMessage(err.ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator" % params[0])
+                        self.sendMessage(rpl.RPL_NOTOPIC, "%s :No topic is set" % chan)
+                    else:
+                        chan.topic = ' '.join(params[1:])
+                        chan.topic_author = self.nickname
+                        for i in chan.clients.keys():
+                            chan.clients[i].sendMessage(rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
+            except Exception, e:
+                print e
+                self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % params[0])
+

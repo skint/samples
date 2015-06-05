@@ -25,7 +25,7 @@ class Channel(object):
         self.topic = ""
         self.topic_author = ""
         self.clients = {owner.nickname: owner}
-        self.o = [owner]
+        self.o = [owner.nickname]
         self.p = False
         self.s = False
         self.i = False
