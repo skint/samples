@@ -12,13 +12,21 @@ import errors as err
 import replys as rpl
 from channel import Channel
 
+
 class commandMixin(object):
+
+    def ping_cmd(self, params):
+        self.sendLine("PONG %s" % params[0])
+
+    def pong_cmd(self, params):
+        pass
 
     def nick_cmd(self, params):
         if len(params) < 1:
             self.sendMessage(err.ERR_NONICKNAMEGIVEN, '%s :No nickname given' % params[0])
         try:
             self.nickname = params[0]
+            self.sendToChan(self.channels.values(), "NICK", self.nickname)
         except ValueError, e:
             self.sendMessage(err.ERR_ERRONEUSNICKNAME, '%s :%s' % (params[0], e))
         except AssertionError, e:
@@ -53,42 +61,52 @@ class commandMixin(object):
         self.password = params[0].split()[-1]
 
     def mode_cmd(self, params):
+        def noticeall(body, clients):
+            for client in clients:
+                client.sendMessage('MODE', body, to=client.nickname)
+
+        def noticeme(body):
+            pass
+
         result = None
-        who = params[0]
-        if who[0] in ['#', '&']:
+        target = params[0]
+        if len(params) == 1:
+            pass
+            # self.sendMessage(rpl.RPL_CHANNELMODEIS, ":")
+        elif target[0] in ['#', '&']:
             try:
-                channel = self.server.channels[who]
+                channel = self.server.channels[target]
                 if params[1][1] in ['p', 's', 'i', 't', 'n', 'm']:
                     if params[1][0] == '+':
                         result = True
                     elif params[1][0] == '-':
                         result = False
-                    self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s' % (who, params[1]))
+                    params.append('')
+                    params[2] = ''
                     setattr(channel, params[1][1], result)
 
                 elif params[1][1] in ['l', 'k']:
                     if params[1][0] == '+':
                         value = params[2]
+                        if params[1][1] == 'k':
+                            params[2] = '*' * len(params[2])
                     elif params[1][0] == '-':
                         value = None
+                        params.append('')
+                        params[2] = ''
                     setattr(channel, params[1][1], value)
-                    self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], ' '.join(params[2:])))
 
                 elif params[1][1] == 'b':
                     if params[1][0] == '+':
                         if len(params) < 3:
-                            print channel.b
                             for ban in channel.b:
-                                self.sendMessage(rpl.RPL_BANLIST, "%s %s" % (who, ban))
-                            self.sendMessage(rpl.RPL_ENDOFBANLIST, "%s :End of channel ban list" % who)
-                            print "HERE"
+                                self.sendMessage(rpl.RPL_BANLIST, "%s %s" % (target, ban))
+                            self.sendMessage(rpl.RPL_ENDOFBANLIST, "%s :End of channel ban list" % target)
                         else:
                             channel.b.append(params[2])
-                            self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
                     elif params[1][0] == '-':
                         try:
                             channel.b.remove(params[2])
-                            self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
                         except:
                             pass
 
@@ -103,7 +121,6 @@ class commandMixin(object):
                             channel.b.remove(params[2])
                         except:
                             pass
-                    self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
 
                 elif params[1][1] == 'v':
                     if params[1][0] == '+':
@@ -116,13 +133,14 @@ class commandMixin(object):
                             channel.b.remove(params[2])
                         except:
                             pass
-                    self.sendMessage(rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (who, params[1], params[2]))
+                self.sendToChan(channel, rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (target, params[1], params[2]))
+                self.sendToChan(channel, 'MODE', "%s %s %s" % (target, params[1], params[2]))
 
             except Exception, e:
                 print e
-                self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % who)
+                self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % target)
 
-        if who == self.nickname:
+        if target == self.nickname:
             if params[1][0] == '+':
                 result = True
             elif params[1][0] == '-':
@@ -154,7 +172,7 @@ class commandMixin(object):
 
     def quit_cmd(self, params):
         # XXX: send quit message to every channels
-        self.sendMessage("QUIT", "%s" % ' '.join(params))
+        self.sendToChan(self.channels.values(), "QUIT", "%s" % ' '.join(params))
         self.transport.loseConnection()
 
     def join_cmd(self, params):
@@ -172,6 +190,7 @@ class commandMixin(object):
                     try:
                         c = Channel(chan, self)
                         self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
+                        self.names_cmd([chan])
                     except Exception, e:
                         self.sendMessage(err.ERR_NOSUCHCHANNEL, '%s :%s' % (params[0], e))
                 else:
@@ -180,6 +199,8 @@ class commandMixin(object):
                         c.clients[self.nickname] = self
                         self.channels[chan] = c
                         self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
+                        self.names_cmd([chan])
+                        self.sendToChan(c, "JOIN", chan)
                     else:
                         self.sendMessage(err.ERR_BADCHANNELKEY, ":%s" % chan)
 
@@ -187,7 +208,7 @@ class commandMixin(object):
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters")
         else:
-            try:
+            if params[0] in self.channels.keys():
                 chan = self.channels[params[0]]
                 if len(params) > 1:
                     if self.nickname not in chan.clients.keys():
@@ -198,9 +219,29 @@ class commandMixin(object):
                     else:
                         chan.topic = ' '.join(params[1:])
                         chan.topic_author = self.nickname
-                        for i in chan.clients.keys():
-                            chan.clients[i].sendMessage(rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
-            except Exception, e:
-                print e
+                        self.sendToChan(chan, "TOPIC", "%s" % (chan.topic), prefix=self.nickname)
+                        self.sendToChan(chan, rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
+            else:
                 self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % params[0])
 
+
+    def names_cmd(self, params):
+        if len(params) > 0:
+            for channame in params[0].split(','):
+                for chan in self.server.channels.keys():
+                    c = self.server.channels[chan]
+                    namelist = []
+                    for name in c.clients.keys():
+                        tmp = ''
+                        if name in c.o:
+                            tmp = "@%s" % name
+                        elif name in c.v:
+                            tmp = "+%s" % name
+                        else:
+                            tmp = name
+                        namelist.append(tmp)
+                    print ' '.join(namelist)
+                    self.sendMessage(rpl.RPL_NAMREPLY, "@ %s :%s" % (chan, ' '.join(namelist)))
+                    self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
+        else:
+            self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)

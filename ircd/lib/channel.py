@@ -25,7 +25,7 @@ class Channel(object):
         self.topic = ""
         self.topic_author = ""
         self.clients = {owner.nickname: owner}
-        self.o = [owner.nickname]
+        self.o = []
         self.p = False
         self.s = False
         self.i = False
@@ -38,6 +38,7 @@ class Channel(object):
         self.k = None
         owner.channels[self.name] = self
         owner.server.channels[self.name] = self
+        owner.mode_cmd([name, '+o', owner.nickname])
 
     def __str__(self):
         return self.name

@@ -11,8 +11,8 @@ __date__ = '2015-06-04'
 import socket
 import re
 import commands as cmd
+import errors as err
 from twisted.internet import protocol, reactor
-from twisted.internet.endpoints import TCP4ServerEndpoint
 
 
 class Client(protocol.Protocol, cmd.commandMixin):
@@ -28,6 +28,10 @@ class Client(protocol.Protocol, cmd.commandMixin):
             if name not in self.server.nicknames.keys() and self._nickname != name:
                 if self.nickname in self.server.nicknames.keys():
                     self.server.nicknames.pop(self.nickname)
+                    for chan in self.channels.keys():
+                        self.channels[chan].clients.pop[self.nickname]
+                        self.channels[chan].clients[name] = self
+                        self.names_cmd([chan])
                 self.server.nicknames[name] = self
                 self._nickname = name
             else:
@@ -37,7 +41,11 @@ class Client(protocol.Protocol, cmd.commandMixin):
 
     @property
     def realm(self):
-        return "%s!%s@%s (%s)" % (self.nickname, self.nickname, self.hostname, self.realname)
+        return "%s!%s@%s" % (self.nickname, self.nickname, self.hostname)
+
+    def ping(self):
+        self.sendLine("%s PING %s" % (self.realm, str(id(self))))
+        reactor.callLater(30, self.ping)
 
     def connectionMade(self):
         self.server = self.factory
@@ -53,6 +61,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.o = False
         self.hostname = socket.getfqdn()
         self.server.clients.append(self)
+        self.ping()
         print "Client from %s is coming" % self.hostname
 
     def connectionLost(self, arg):
@@ -63,23 +72,35 @@ class Client(protocol.Protocol, cmd.commandMixin):
         if self.nickname in self.server.operators.keys():
             self.server.operators.pop(self.nickname)
         self.server.clients.remove(self)
-        self.server.nicknames.pop(self.nickname)
+        if self.nickname:
+            self.server.nicknames.pop(self.nickname)
+
+    def sendLine(self, message):
+        line = ":%s\r\n" % (message)
+        print "OUT>> %s" % line
+        self.transport.write(line)
+
+    def sendToChan(self, channels, command, message, **kw):
+        if type(channels) is not list:
+            channels = [channels]
+
+        if 'prefix' not in kw.keys():
+            kw['prefix'] = self.realm
+
+        for chan in channels:
+            for client in chan.clients.values():
+                client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
 
     def sendMessage(self, command, *params, **kw):
-        if 'to' not in kw:
+        if 'to' not in kw.keys():
             kw['to'] = self.nickname
 
-        if 'prefix' not in kw:
-            kw['prefix'] = self.hostname
+        if 'prefix' not in kw.keys():
+            kw['prefix'] = self.realm
 
-        line = ' '.join([command, kw['to']] + list(params))
+        line = ' '.join([kw['prefix'], command, str(kw['to'])] + list(params))
 
-        if 'prefix' in kw:
-            line = ":%s %s" % (kw['prefix'], line)
-
-        print ">>OUT: %s" % line
-
-        self.transport.write("%s\r\n" % line)
+        self.sendLine(line)
 
     def dataReceived(self, data):
         lines = data.split("\r\n")
@@ -88,7 +109,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
                 continue
             if line[-1] == "\r":
                 line = line[:-1]
-            print "<<IN: %s" % line
+            print "IN << %s" % line
             c = line.split(" ")
             cmd = c[0].strip().lower()
             if len(c) > 1:
@@ -100,10 +121,9 @@ class Client(protocol.Protocol, cmd.commandMixin):
     def handleCmd(self, cmd, params):
         method = getattr(self, "%s_cmd" % cmd, None)
         if method:
-            print "%s_cmd(%s)" % (cmd, params)
             method(params)
         else:
-            self.sendMessage('421', '%s :Unknown command' % cmd.upper())
+            self.sendMessage(err.ERR_UNKNOWNCOMMAND, '%s :Unknown command' % cmd.upper())
 
 
     def __str__(self):
