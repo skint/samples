@@ -25,7 +25,8 @@ class Client(protocol.Protocol, cmd.commandMixin):
     def nickname(self, name):
         valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,9}$")
         if valid_nickname.match(name):
-            if name not in self.server.nicknames.keys() and self._nickname != name:
+            # if name not in self.server.nicknames.keys() and self._nickname != name:
+            if name not in self.server.nicknames.keys() or self.server.nicknames[name] == self:
                 if self.nickname in self.server.nicknames.keys():
                     self.server.nicknames.pop(self.nickname)
                     for chan in self.channels.keys():
@@ -65,7 +66,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
         print "Client from %s is coming" % self.hostname
 
     def connectionLost(self, arg):
-        print "%s goes offline" % self.__str__()
+        self.sendToChan(self.channels.values(), "QUIT", ":User goes offline")
         for channel in self.channels.keys():
             self.channels[channel].clients.pop(self.nickname)
             self.channels.pop(channel)

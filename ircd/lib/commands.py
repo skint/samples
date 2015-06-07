@@ -171,11 +171,11 @@ class commandMixin(object):
                 self.sendMessage(err.ERR_NOOPERHOST, ":No O-lines for your host.")
 
     def quit_cmd(self, params):
-        # XXX: send quit message to every channels
         self.sendToChan(self.channels.values(), "QUIT", "%s" % ' '.join(params))
         self.transport.loseConnection()
 
     def join_cmd(self, params):
+        print "Clients: ", self.server.nicknames
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "JOIN :Not enough parameters")
         else:
@@ -245,3 +245,18 @@ class commandMixin(object):
                     self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
         else:
             self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
+
+    def part_cmd(self, params):
+        if len(params) < 1:
+            self.sendMessage(err.ERR_NEEDMOREPARAMS, ":Need channel name")
+        else:
+            for name in ','.join(params).split(','):
+                name = name.strip()
+                if name not in self.server.channels.keys():
+                    self.sendMessage(err.ERR_NOSUCHCHANNEL, ":There is no channel %s" % name)
+                elif name not in self.channels.keys():
+                    self.sendMessage(err.ERR_NOTONCHANNEL, ":You are not on channel %s" % name)
+                else:
+                    self.sendToChan(self.channels[name], "PART", name, to=name)
+                    self.channels[name].clients.pop(self.nickname)
+                    self.channels.pop(name)
