@@ -88,9 +88,15 @@ class Client(protocol.Protocol, cmd.commandMixin):
         if 'prefix' not in kw.keys():
             kw['prefix'] = self.realm
 
+        if 'notself' not in kw.keys():
+            kw['notself'] = False
+
         for chan in channels:
             for client in chan.clients.values():
-                client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
+                if kw['notself'] and client == self:
+                    pass
+                else:
+                    client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
 
     def sendMessage(self, command, *params, **kw):
         if 'to' not in kw.keys():

@@ -61,13 +61,6 @@ class commandMixin(object):
         self.password = params[0].split()[-1]
 
     def mode_cmd(self, params):
-        def noticeall(body, clients):
-            for client in clients:
-                client.sendMessage('MODE', body, to=client.nickname)
-
-        def noticeme(body):
-            pass
-
         result = None
         target = params[0]
         if len(params) == 1:
@@ -214,8 +207,8 @@ class commandMixin(object):
                     if self.nickname not in chan.clients.keys():
                         self.sendMessage(err.ERR_NOTONCHANNEL, "%s :You're not on that channel" % params[0])
                     elif chan.t is True and self.nickname not in chan.o:
-                        # self.sendMessage(err.ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator" % params[0])
-                        self.sendMessage(rpl.RPL_NOTOPIC, "%s :No topic is set" % chan)
+                        self.sendMessage(err.ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator" % params[0])
+                        self.sendMessage(rpl.RPL_NOTOPIC, "%s :No topic is set" % params[0])
                     else:
                         chan.topic = ' '.join(params[1:])
                         chan.topic_author = self.nickname
@@ -260,3 +253,39 @@ class commandMixin(object):
                     self.sendToChan(self.channels[name], "PART", name, to=name)
                     self.channels[name].clients.pop(self.nickname)
                     self.channels.pop(name)
+
+    def list_cmd(self, params):
+        names = []
+        if len(params) > 0 and len(params[0].strip()) > 2:
+            for name in params[0].strip().split(','):
+                names.append(name.strip())
+        else:
+            names = self.server.channels.keys()
+
+        self.sendMessage(rpl.RPL_LISTSTART, "Channel :Users Name")
+        for name in names:
+            try:
+                chan = self.server.channels[name]
+                self.sendMessage(rpl.RPL_LIST, "%s %s :%s" % (chan.name, len(chan.clients), chan.topic))
+            except:
+                pass
+        self.sendMessage(rpl.RPL_LISTEND, ":End of /LIST")
+
+    def privmsg_cmd(self, params):
+        if len(params) == 0:
+            self.sendMessage(err.ERR_NORECIPIENT, "No recipient given (PRIVMSG)")
+        elif len(params) < 2:
+            self.sendMessage(err.ERR_NOTEXTTOSEND, "No text to send")
+        else:
+            names = params[0].strip().split(',')
+            for name in names:
+                if name not in self.server.nicknames.keys() + self.server.channels.keys():
+                    self.sendMessage(err.ERR_NOSUCHNICK, ":%s No such nick/channel" % name)
+
+                if name.startswith(('#', '&')):
+                    if len(self.server.channels[name].v) != 0 and self.nickname not in self.channels[name].v:
+                        self.sendMessage(err.ERR_CANNOTSENDTOCHAN, ":Cannot send to channel")
+                    else:
+                        self.sendToChan(self.server.channels[name], "PRIVMSG", "%s" % ' '.join(params[1:]), to=name, notself=True)
+                else:
+                    self.server.nicknames[name].sendMessage("PRIVMSG", "%s" % ' '.join(params[1:]), to=name, prefix=self.realm)
