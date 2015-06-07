@@ -111,7 +111,7 @@ class commandMixin(object):
                             channel.o.append(params[2])
                     elif params[1][0] == '-':
                         try:
-                            channel.b.remove(params[2])
+                            channel.o.remove(params[2])
                         except:
                             pass
 
@@ -123,7 +123,7 @@ class commandMixin(object):
                             channel.v.append(params[2])
                     elif params[1][0] == '-':
                         try:
-                            channel.b.remove(params[2])
+                            channel.v.remove(params[2])
                         except:
                             pass
                 self.sendToChan(channel, rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (target, params[1], params[2]))
@@ -189,11 +189,14 @@ class commandMixin(object):
                 else:
                     c = self.server.channels[chan]
                     if c.k == chans[chan]:
-                        c.clients[self.nickname] = self
-                        self.channels[chan] = c
-                        self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
-                        self.names_cmd([chan])
-                        self.sendToChan(c, "JOIN", chan)
+                        if c.l and c.l < len(c.clients):
+                            self.sendMessage(err.ERR_CHANNELISFULL, "%s :Cannot join channel (+l)" % chan)
+                        else:
+                            c.clients[self.nickname] = self
+                            self.channels[chan] = c
+                            self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
+                            self.names_cmd([chan])
+                            self.sendToChan(c, "JOIN", chan)
                     else:
                         self.sendMessage(err.ERR_BADCHANNELKEY, ":%s" % chan)
 
@@ -218,6 +221,19 @@ class commandMixin(object):
                 self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % params[0])
 
 
+    def userstate(self, nick, name):
+        if name in self.server.channels.keys():
+            chan = self.server.channels[name]
+            if nick in chan.clients.keys():
+                tmp = '%s'
+                if nick in chan.o:
+                    tmp = '@%s'
+                elif nick in chan.v:
+                    tmp = '+%s'
+                return tmp % nick
+            return None
+        return None
+
     def names_cmd(self, params):
         if len(params) > 0:
             for channame in params[0].split(','):
@@ -225,15 +241,7 @@ class commandMixin(object):
                     c = self.server.channels[chan]
                     namelist = []
                     for name in c.clients.keys():
-                        tmp = ''
-                        if name in c.o:
-                            tmp = "@%s" % name
-                        elif name in c.v:
-                            tmp = "+%s" % name
-                        else:
-                            tmp = name
-                        namelist.append(tmp)
-                    print ' '.join(namelist)
+                        namelist.append(self.userstate(name, chan))
                     self.sendMessage(rpl.RPL_NAMREPLY, "@ %s :%s" % (chan, ' '.join(namelist)))
                     self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
         else:
@@ -283,8 +291,8 @@ class commandMixin(object):
                     self.sendMessage(err.ERR_NOSUCHNICK, ":%s No such nick/channel" % name)
 
                 if name.startswith(('#', '&')):
-                    if len(self.server.channels[name].v) != 0 and self.nickname not in self.channels[name].v:
-                        self.sendMessage(err.ERR_CANNOTSENDTOCHAN, ":Cannot send to channel")
+                    if len(self.server.channels[name].v) != 0 and self.nickname not in self.channels[name].v + self.channels[name].o:
+                        self.sendMessage(err.ERR_CANNOTSENDTOCHAN, ":Cannot send to channel", prefix="Server")
                     else:
                         self.sendToChan(self.server.channels[name], "PRIVMSG", "%s" % ' '.join(params[1:]), to=name, notself=True)
                 else:
