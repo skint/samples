@@ -18,20 +18,21 @@ from time import time
 class commandMixin(object):
 
     def ping_cmd(self, params):
-        self.sendLine("PONG %s" % params[0])
+        d = self.sendLine("PONG %s" % params[0])
+        d.addCallback(self.sentDone)
+        d.addErrback(self.quit_cmd)
 
     def pong_cmd(self, params):
         if len(params) > 0:
             if params[0] == id(self):
                 self.lastaction = time()
 
-    @defer.inlineCallbacks
     def nick_cmd(self, params):
         if len(params) < 1:
             self.sendMessage(err.ERR_NONICKNAMEGIVEN, '%s :No nickname given' % params[0])
         try:
             self.nickname = params[0]
-            yield self.sendToChan(self.channels.values(), "NICK", self.nickname)
+            self.sendToChan(self.channels.values(), "NICK", self.nickname)
         except ValueError, e:
             self.sendMessage(err.ERR_ERRONEUSNICKNAME, '%s :%s' % (params[0], e))
         except AssertionError, e:
@@ -65,7 +66,6 @@ class commandMixin(object):
     def pass_cmd(self, params):
         self.password = params[0].split()[-1]
 
-    @defer.inlineCallbacks
     def mode_cmd(self, params):
         result = None
         target = params[0]
@@ -132,8 +132,8 @@ class commandMixin(object):
                             channel.v.remove(params[2])
                         except:
                             pass
-                yield self.sendToChan(channel, rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (target, params[1], params[2]))
-                yield self.sendToChan(channel, 'MODE', "%s %s %s" % (target, params[1], params[2]))
+                self.sendToChan(channel, rpl.RPL_CHANNELMODEIS, '%s :%s %s' % (target, params[1], params[2]))
+                self.sendToChan(channel, 'MODE', "%s %s %s" % (target, params[1], params[2]))
 
             except Exception, e:
                 print e
@@ -169,12 +169,10 @@ class commandMixin(object):
             else:
                 self.sendMessage(err.ERR_NOOPERHOST, ":No O-lines for your host.")
 
-    @defer.inlineCallbacks
     def quit_cmd(self, params):
-        yield self.sendToChan(self.channels.values(), "QUIT", "%s" % ' '.join(params))
+        self.sendToChan(self.channels.values(), "QUIT", "%s" % ' '.join(params))
         self.transport.loseConnection()
 
-    @defer.inlineCallbacks
     def join_cmd(self, params):
         print "Clients: ", self.server.nicknames
         if len(params) < 1:
@@ -204,11 +202,10 @@ class commandMixin(object):
                             self.channels[chan] = c
                             self.sendMessage(rpl.RPL_TOPIC, "%s %s" % (chan, c.topic))
                             self.names_cmd([chan])
-                            yield self.sendToChan(c, "JOIN", chan)
+                            self.sendToChan(c, "JOIN", chan)
                     else:
                         self.sendMessage(err.ERR_BADCHANNELKEY, ":%s" % chan)
 
-    @defer.inlineCallbacks
     def topic_cmd(self, params):
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters")
@@ -224,8 +221,8 @@ class commandMixin(object):
                     else:
                         chan.topic = ' '.join(params[1:])
                         chan.topic_author = self.nickname
-                        yield self.sendToChan(chan, "TOPIC", "%s" % (chan.topic), prefix=self.nickname)
-                        yield self.sendToChan(chan, rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
+                        self.sendToChan(chan, "TOPIC", "%s" % (chan.topic), prefix=self.nickname)
+                        self.sendToChan(chan, rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
             else:
                 self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % params[0])
 
@@ -256,7 +253,6 @@ class commandMixin(object):
         else:
             self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
 
-    @defer.inlineCallbacks
     def part_cmd(self, params):
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, ":Need channel name")
@@ -268,7 +264,7 @@ class commandMixin(object):
                 elif name not in self.channels.keys():
                     self.sendMessage(err.ERR_NOTONCHANNEL, ":You are not on channel %s" % name)
                 else:
-                    yield self.sendToChan(self.channels[name], "PART", name, to=name)
+                    self.sendToChan(self.channels[name], "PART", name, to=name)
                     self.channels[name].clients.pop(self.nickname)
                     self.channels.pop(name)
 
@@ -289,7 +285,6 @@ class commandMixin(object):
                 pass
         self.sendMessage(rpl.RPL_LISTEND, ":End of /LIST")
 
-    @defer.inlineCallbacks
     def privmsg_cmd(self, params):
         if len(params) == 0:
             self.sendMessage(err.ERR_NORECIPIENT, "No recipient given (PRIVMSG)")
@@ -305,6 +300,6 @@ class commandMixin(object):
                     if len(self.server.channels[name].v) != 0 and self.nickname not in self.channels[name].v + self.channels[name].o:
                         self.sendMessage(err.ERR_CANNOTSENDTOCHAN, ":Cannot send to channel", prefix="Server")
                     else:
-                        yield self.sendToChan(self.server.channels[name], "PRIVMSG", "%s" % ' '.join(params[1:]), to=name, notself=True)
+                        self.sendToChan(self.server.channels[name], "PRIVMSG", "%s" % ' '.join(params[1:]), to=name, notself=True)
                 else:
                     self.server.nicknames[name].sendMessage("PRIVMSG", "%s" % ' '.join(params[1:]), to=name, prefix=self.realm)

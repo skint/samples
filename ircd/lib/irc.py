@@ -47,7 +47,9 @@ class Client(protocol.Protocol, cmd.commandMixin):
 
     def ping(self):
         if (time()-self.lastaction) > 30:
-            self.sendLine("%s PING %s" % (self.realm, str(id(self))))
+            d=self.sendLine("%s PING %s" % (self.realm, str(id(self))))
+            d.addCallback(self.sentDone)
+            d.addErrback(self.quit_cmd)
         reactor.callLater(30, self.ping)
 
     def connectionMade(self):
@@ -63,14 +65,13 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.w = False
         self.o = False
         self.lastaction = 0
-        self.hostname = socket.getfqdn()
+        self.hostname = socket.gethostname()
         self.server.clients.append(self)
         self.ping()
         print "Client from %s is coming" % self.hostname
 
-    @defer.inlineCallbacks
-    def connectionLost(self, arg):
-        yield self.sendToChan(self.channels.values(), "QUIT", ":User goes offline")
+    def connectionLost(self, reason):
+        self.sendToChan(self.channels.values(), "QUIT", str(reason.value))
         for channel in self.channels.keys():
             self.channels[channel].clients.pop(self.nickname)
             self.channels.pop(channel)
@@ -79,15 +80,24 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.server.clients.remove(self)
         if self.nickname:
             self.server.nicknames.pop(self.nickname)
+        del self
+
+    def sentDone(self, data):
+        pass
 
     def sendLine(self, message):
+        d = defer.Deferred()
         self.lastaction = time()
         line = ":%s\r\n" % (message)
         print "OUT>> %s" % line
-        self.transport.write(line)
+        try:
+            self.transport.write(line)
+            d.callback("Message '%s' sent." % message)
+        except:
+            d.errback(["Connection lost"])
+        return d
 
     def sendToChan(self, channels, command, message, **kw):
-        d = defer.Deferred()
         if type(channels) is not list:
             channels = [channels]
 
@@ -107,7 +117,6 @@ class Client(protocol.Protocol, cmd.commandMixin):
                     except Exception, e:
                         print e
 
-        return d
 
     def sendMessage(self, command, *params, **kw):
         if 'to' not in kw.keys():
@@ -118,7 +127,9 @@ class Client(protocol.Protocol, cmd.commandMixin):
 
         line = ' '.join([kw['prefix'], command, str(kw['to'])] + list(params))
 
-        self.sendLine(line)
+        d = self.sendLine(line)
+        d.addCallback(self.sentDone)
+        d.addErrback(self.quit_cmd)
 
     def dataReceived(self, data):
         lines = data.split("\r\n")
