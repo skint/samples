@@ -101,8 +101,8 @@ class Client(protocol.Protocol, cmd.commandMixin):
                     try:
                         client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
                         d.callback("Message to %s on %s is sent" % (client.nickname, chan.name))
-                    except:
-                        d.errback("Message to %s on %s is not sent!" % (client.nickname, chan.name))
+                    except Exception, e:
+                        d.errback(Exception("Message to %s on %s is not sent, cause %s" % (client.nickname, chan.name, e)))
 
         return d
 
