@@ -51,17 +51,16 @@ class commandMixin(object):
             self.sendMessage(err.ERR_ERRONEUSNICKNAME, '%s :%e' % (params[0], e))
         except AssertionError, e:
             self.sendMessage(err.ERR_NICKNAMEINUSE, '%s :%s' % (params[0], e))
+        else:
+            self.hostname = params[1]
+            self.servername = params[2]
 
+            if params[3:][0].startswith(":"):
+                self.realname = params[3:][1:]
 
-        self.hostname = params[1]
-        self.servername = params[2]
-
-        if params[3:][0].startswith(":"):
-            self.realname = params[3:][1:]
-
-        self.sendMessage(rpl.RPL_MOTDSTART, ':- Message Of The Day - ')
-        self.sendMessage(rpl.RPL_MOTD, ':- MOTD DATA')
-        self.sendMessage(rpl.RPL_ENDOFMOTD, ':End of /MOTD command.')
+            self.sendMessage(rpl.RPL_MOTDSTART, ':- Message Of The Day - ')
+            self.sendMessage(rpl.RPL_MOTD, ':- MOTD DATA')
+            self.sendMessage(rpl.RPL_ENDOFMOTD, ':End of /MOTD command.')
 
     def pass_cmd(self, params):
         self.password = params[0].split()[-1]
@@ -221,7 +220,7 @@ class commandMixin(object):
                     else:
                         chan.topic = ' '.join(params[1:])
                         chan.topic_author = self.nickname
-                        self.sendToChan(chan, "TOPIC", "%s" % (chan.topic), prefix=self.nickname)
+                        self.sendToChan(chan, "TOPIC", "%s" % (chan.topic), prefix=self.realm)
                         self.sendToChan(chan, rpl.RPL_TOPIC, "%s %s" % (params[0], chan.topic))
             else:
                 self.sendMessage(err.ERR_NOSUCHCHANNEL, "%s :No such channel." % params[0])
@@ -248,7 +247,7 @@ class commandMixin(object):
                     namelist = []
                     for name in c.clients.keys():
                         namelist.append(self.userstate(name, chan))
-                    self.sendMessage(rpl.RPL_NAMREPLY, "@ %s :%s" % (chan, ' '.join(namelist)))
+                    self.sendMessage(rpl.RPL_NAMREPLY, "@ %s :%s" % (chan, ' '.join(namelist)), to=chan)
                     self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
         else:
             self.sendMessage(rpl.RPL_ENDOFNAMES, "%s :End of /NAMES list" % chan)
