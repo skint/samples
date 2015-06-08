@@ -13,6 +13,7 @@ import re
 import commands as cmd
 import errors as err
 from twisted.internet import protocol, reactor, defer
+from time import time
 
 
 class Client(protocol.Protocol, cmd.commandMixin):
@@ -45,7 +46,8 @@ class Client(protocol.Protocol, cmd.commandMixin):
         return "%s!%s@%s" % (self.nickname, self.nickname, self.hostname)
 
     def ping(self):
-        self.sendLine("%s PING %s" % (self.realm, str(id(self))))
+        if (time()-self.lastaction) > 30:
+            self.sendLine("%s PING %s" % (self.realm, str(id(self))))
         reactor.callLater(30, self.ping)
 
     def connectionMade(self):
@@ -60,6 +62,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.s = False
         self.w = False
         self.o = False
+        self.lastaction = 0
         self.hostname = socket.getfqdn()
         self.server.clients.append(self)
         self.ping()
