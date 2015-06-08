@@ -18,7 +18,6 @@ from time import time
 class commandMixin(object):
 
     def ping_cmd(self, params):
-        self.lastaction = time()
         self.sendLine("PONG %s" % params[0])
 
     def pong_cmd(self, params):
@@ -28,7 +27,6 @@ class commandMixin(object):
 
     @defer.inlineCallbacks
     def nick_cmd(self, params):
-        self.lastaction = time()
         if len(params) < 1:
             self.sendMessage(err.ERR_NONICKNAMEGIVEN, '%s :No nickname given' % params[0])
         try:
@@ -40,7 +38,6 @@ class commandMixin(object):
             self.sendMessage(err.ERR_NICKNAMEINUSE, '%s :%s' % (params[0], e))
 
     def user_cmd(self, params):
-        self.lastaction = time()
         if len(params) < 4:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "CMD :Not enough parameters")
         try:
@@ -66,12 +63,10 @@ class commandMixin(object):
         self.sendMessage(rpl.RPL_ENDOFMOTD, ':End of /MOTD command.')
 
     def pass_cmd(self, params):
-        self.lastaction = time()
         self.password = params[0].split()[-1]
 
     @defer.inlineCallbacks
     def mode_cmd(self, params):
-        self.lastaction = time()
         result = None
         target = params[0]
         if len(params) == 1:
@@ -161,7 +156,6 @@ class commandMixin(object):
                 self.sendMessage(err.ERR_UMODEUNKNOWNFLAG, ':Unknown MODE flag.')
 
     def oper_cmd(self, params):
-        self.lastaction = time()
         if len(params) < 2:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "OPER :Not enough parameters")
         else:
@@ -182,7 +176,6 @@ class commandMixin(object):
 
     @defer.inlineCallbacks
     def join_cmd(self, params):
-        self.lastaction = time()
         print "Clients: ", self.server.nicknames
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "JOIN :Not enough parameters")
@@ -217,7 +210,6 @@ class commandMixin(object):
 
     @defer.inlineCallbacks
     def topic_cmd(self, params):
-        self.lastaction = time()
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, "TOPIC :Not enough parameters")
         else:
@@ -252,7 +244,6 @@ class commandMixin(object):
         return None
 
     def names_cmd(self, params):
-        self.lastaction = time()
         if len(params) > 0:
             for channame in params[0].split(','):
                 for chan in self.server.channels.keys():
@@ -267,7 +258,6 @@ class commandMixin(object):
 
     @defer.inlineCallbacks
     def part_cmd(self, params):
-        self.lastaction = time()
         if len(params) < 1:
             self.sendMessage(err.ERR_NEEDMOREPARAMS, ":Need channel name")
         else:
@@ -283,7 +273,6 @@ class commandMixin(object):
                     self.channels.pop(name)
 
     def list_cmd(self, params):
-        self.lastaction = time()
         names = []
         if len(params) > 0 and len(params[0].strip()) > 2:
             for name in params[0].strip().split(','):
@@ -302,7 +291,6 @@ class commandMixin(object):
 
     @defer.inlineCallbacks
     def privmsg_cmd(self, params):
-        self.lastaction = time()
         if len(params) == 0:
             self.sendMessage(err.ERR_NORECIPIENT, "No recipient given (PRIVMSG)")
         elif len(params) < 2:

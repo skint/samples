@@ -81,6 +81,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
             self.server.nicknames.pop(self.nickname)
 
     def sendLine(self, message):
+        self.lastaction = time()
         line = ":%s\r\n" % (message)
         print "OUT>> %s" % line
         self.transport.write(line)
