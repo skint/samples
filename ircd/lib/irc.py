@@ -12,7 +12,7 @@ import socket
 import re
 import commands as cmd
 import errors as err
-from twisted.internet import protocol, reactor
+from twisted.internet import protocol, reactor, defer
 
 
 class Client(protocol.Protocol, cmd.commandMixin):
@@ -65,8 +65,9 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.ping()
         print "Client from %s is coming" % self.hostname
 
+    @defer.inlineCallbacks
     def connectionLost(self, arg):
-        self.sendToChan(self.channels.values(), "QUIT", ":User goes offline")
+        yield self.sendToChan(self.channels.values(), "QUIT", ":User goes offline")
         for channel in self.channels.keys():
             self.channels[channel].clients.pop(self.nickname)
             self.channels.pop(channel)
@@ -82,6 +83,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.transport.write(line)
 
     def sendToChan(self, channels, command, message, **kw):
+        d = defer.Deferred()
         if type(channels) is not list:
             channels = [channels]
 
@@ -96,7 +98,13 @@ class Client(protocol.Protocol, cmd.commandMixin):
                 if kw['notself'] and client == self:
                     pass
                 else:
-                    client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
+                    try:
+                        client.sendMessage(command, message, to=chan.name, prefix=kw['prefix'])
+                        d.callback("Message to %s on %s is sent" % (client.nickname, chan.name))
+                    except:
+                        d.errback("Message to %s on %s is not sent!" % (client.nickname, chan.name))
+
+        return d
 
     def sendMessage(self, command, *params, **kw):
         if 'to' not in kw.keys():
