@@ -52,7 +52,7 @@ class commandMixin(object):
         except AssertionError, e:
             self.sendMessage(err.ERR_NICKNAMEINUSE, '%s :%s' % (params[0], e))
         else:
-            self.hostname = params[1]
+            # self.hostname = params[1]
             self.servername = params[2]
 
             if params[3:][0].startswith(":"):
@@ -279,9 +279,10 @@ class commandMixin(object):
         for name in names:
             try:
                 chan = self.server.channels[name]
-                self.sendMessage(rpl.RPL_LIST, "%s %s :%s" % (chan.name, len(chan.clients), chan.topic))
-            except:
-                pass
+                if not (chan.s or chan.p) or (chan.p and chan.name in self.channels.keys()):
+                    self.sendMessage(rpl.RPL_LIST, "%s %s :%s" % (chan.name, len(chan.clients), chan.topic))
+            except Exception, e:
+                print e
         self.sendMessage(rpl.RPL_LISTEND, ":End of /LIST")
 
     def privmsg_cmd(self, params):
