@@ -26,13 +26,15 @@ class Client(protocol.Protocol, cmd.commandMixin):
     def nickname(self, name):
         valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,9}$")
         if valid_nickname.match(name):
-            # if name not in self.server.nicknames.keys() and self._nickname != name:
             if name not in self.server.nicknames.keys() or self.server.nicknames[name] == self:
                 if self.nickname in self.server.nicknames.keys():
                     self.server.nicknames.pop(self.nickname)
                     for chan in self.channels.keys():
                         self.channels[chan].clients.pop[self.nickname]
                         self.channels[chan].clients[name] = self
+                        if self.nickname in self.channels[chan].invites:
+                            self.channels[chan].invites.remove(self.nickname)
+                            self.channels[chan].invites.append(name)
                         self.names_cmd([chan])
                 self.server.nicknames[name] = self
                 self._nickname = name
@@ -50,11 +52,12 @@ class Client(protocol.Protocol, cmd.commandMixin):
             d=self.sendLine("%s PING %s" % (self.realm, str(id(self))))
             d.addCallback(self.sentDone)
             d.addErrback(self.quit_cmd)
-        reactor.callLater(30, self.ping)
+        reactor.callLater(60, self.ping)
 
     def connectionMade(self):
         self.server = self.factory
         self._nickname = None
+        self.away = None
         self.realname = ''
         self.servername = ''
         self.password = None
@@ -74,6 +77,8 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.sendToChan(self.channels.values(), "QUIT", str(reason.value))
         for channel in self.channels.keys():
             self.channels[channel].clients.pop(self.nickname)
+            if self.nickname in self.channels[channel].invites:
+                self.channels[channel].invites.remove(self.nickname)
             self.channels.pop(channel)
         if self.nickname in self.server.operators.keys():
             self.server.operators.pop(self.nickname)
@@ -92,7 +97,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
         print "OUT>> %s" % line
         try:
             self.transport.write(line)
-            d.callback("Message '%s' sent." % message)
+            d.callback(message)
         except:
             d.errback(["Connection lost"])
         return d

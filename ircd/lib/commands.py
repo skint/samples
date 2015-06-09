@@ -196,6 +196,8 @@ class commandMixin(object):
                     if c.k == chans[chan]:
                         if c.l and c.l < len(c.clients):
                             self.sendMessage(err.ERR_CHANNELISFULL, "%s :Cannot join channel (+l)" % chan)
+                        elif c.i and self.nickname not in c.invites:
+                            self.sendMessage(err.ERR_INVITEONLYCHAN, "%s :Cannot join channel (+i)" % chan)
                         else:
                             c.clients[self.nickname] = self
                             self.channels[chan] = c
@@ -203,7 +205,7 @@ class commandMixin(object):
                             self.names_cmd([chan])
                             self.sendToChan(c, "JOIN", chan)
                     else:
-                        self.sendMessage(err.ERR_BADCHANNELKEY, ":%s" % chan)
+                        self.sendMessage(err.ERR_BADCHANNELKEY, ":Cannot join channel (+k)" % chan)
 
     def topic_cmd(self, params):
         if len(params) < 1:
@@ -303,3 +305,27 @@ class commandMixin(object):
                         self.sendToChan(self.server.channels[name], "PRIVMSG", "%s" % ' '.join(params[1:]), to=name, notself=True)
                 else:
                     self.server.nicknames[name].sendMessage("PRIVMSG", "%s" % ' '.join(params[1:]), to=name, prefix=self.realm)
+
+    def invite_done(self, data):
+        data = data.split()
+        self.channels[data[2]].invites.append[data[3]]
+        self.sendMessage(rpl.RPL_IVITING, "%s %s" % (data[3], data[2]))
+        if self.server.nicknames[data[2]].away:
+            self.sendMessage(rpl.RPL_AWAY, "%s :%s" % (data[2], self.server.nicknames[data[2]].away))
+
+    def invite_cmd(self, params):
+        if len(params) < 2:
+            self.sendMessage(err.ERR_NEEDMOREPARAMS, "INVITE :Not enough parameters")
+        elif self.nickname not in self.channels[params[1]].clients.keys():
+            self.sendMessage(err.ERR_NOTONCHANNEL, "%s :You're not on that channel" % params[1])
+        elif self.nickname not in self.channels[params[1]].o:
+            self.sendMessage(err.ERR_CHANOPRIVSNEEDED, "%s :You're not channel operator" % params[1])
+        elif params[0] in self.channels[params[1]].clients.keys():
+            self.sendMessage(err.ERR_USERONCHANNEL, "%s is already on channel" % params[0])
+        elif params[0] not in self.server.nicknames.keys():
+            self.sendMessage(err.ERR_NOSUCHNICK, ":%s" % params[0])
+        else:
+            # XXX: fix this!
+            d = self.sendLine("%s INVITE %s %s" % (self.nickname, params[0], params[1]))
+            d.addCallback(self.invite_done)
+            d.addErrback(self.quit_cmd)
