@@ -26,9 +26,9 @@ class Client(protocol.Protocol, cmd.commandMixin):
     def nickname(self, name):
         valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,9}$")
         if valid_nickname.match(name):
-            if name not in self.server.nicknames.keys() or self.server.nicknames[name] == self:
-                if self.nickname in self.server.nicknames.keys():
-                    self.server.nicknames.pop(self.nickname)
+            if name not in self.server.clients.keys() or self.server.clients[name] == self:
+                if self.nickname in self.server.clients.keys():
+                    self.server.clients.pop(self.nickname)
                     for chan in self.channels.keys():
                         self.channels[chan].clients.pop[self.nickname]
                         self.channels[chan].clients[name] = self
@@ -36,7 +36,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
                             self.channels[chan].invites.remove(self.nickname)
                             self.channels[chan].invites.append(name)
                         self.names_cmd([chan])
-                self.server.nicknames[name] = self
+                self.server.clients[name] = self
                 self._nickname = name
             else:
                 raise AssertionError("Nick name is already in use!")
@@ -56,10 +56,10 @@ class Client(protocol.Protocol, cmd.commandMixin):
 
     def connectionMade(self):
         self.server = self.factory
-        self._nickname = None
+        self._nickname = 'user'+str(id(self))[-5:]
         self.away = None
         self.realname = ''
-        self.servername = ''
+        self.servername = self.server.name
         self.password = None
         self.channels = {}
         self.registered = False
@@ -69,7 +69,6 @@ class Client(protocol.Protocol, cmd.commandMixin):
         self.o = False
         self.lastaction = 0
         self.hostname = socket.gethostname()
-        self.server.clients.append(self)
         self.ping()
         print "Client from %s is coming" % self.hostname
 
@@ -79,12 +78,15 @@ class Client(protocol.Protocol, cmd.commandMixin):
             self.channels[channel].clients.pop(self.nickname)
             if self.nickname in self.channels[channel].invites:
                 self.channels[channel].invites.remove(self.nickname)
+            if self.nickname in self.channels[channel].o:
+                self.channels[channel].o.remove(self.nickname)
+            if self.nickname in self.channels[channel].v:
+                self.channels[channel].v.remove(self.nickname)
             self.channels.pop(channel)
         if self.nickname in self.server.operators.keys():
             self.server.operators.pop(self.nickname)
-        self.server.clients.remove(self)
         if self.nickname:
-            self.server.nicknames.pop(self.nickname)
+            self.server.clients.pop(self.nickname)
         del self
 
     def sentDone(self, data):
@@ -99,7 +101,7 @@ class Client(protocol.Protocol, cmd.commandMixin):
             self.transport.write(line)
             d.callback(message)
         except:
-            d.errback(["Connection lost"])
+            d.errback("Connection lost")
         return d
 
     def sendToChan(self, channels, command, message, **kw):
@@ -174,8 +176,7 @@ class Server(protocol.Factory):
 
     def __init__(self, name):
         self.name = name
-        self.clients = []
-        self.nicknames = {}
+        self.clients = {}
         self.channels = {}
         self.operators = {}
         self.ophosts = ['localhost']
